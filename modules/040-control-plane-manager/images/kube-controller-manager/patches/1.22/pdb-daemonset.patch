@@ -1,12 +1,20 @@
-Index: cmd/kube-controller-manager/app/policy.go
-IDEA additional info:
-Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
-<+>UTF-8
-===================================================================
+From 1a7e0253cad9a4cacbf1ba8678a03742c6f25d4c Mon Sep 17 00:00:00 2001
+From: Eugene <evgeny.shevchenko@flant.com>
+Date: Thu, 14 Jan 2021 06:05:57 +0300
+Subject: [PATCH] add DaemonSet support in PDB
+
+via .Status.DesiredNumberScheduled as the desired number of pods
+---
+ cmd/kube-controller-manager/app/policy.go    |  1 +
+ pkg/controller/disruption/disruption.go      | 30 ++++++-
+ pkg/controller/disruption/disruption_test.go | 87 ++++++++++++++++++++
+ 3 files changed, 116 insertions(+), 2 deletions(-)
+
 diff --git a/cmd/kube-controller-manager/app/policy.go b/cmd/kube-controller-manager/app/policy.go
---- a/cmd/kube-controller-manager/app/policy.go	(revision 151a50e8e9872415562d9dc7b94081ef32fbef5f)
-+++ b/cmd/kube-controller-manager/app/policy.go	(revision 1d028b69c6385bc4bcd5a678aec3186c3fae7da4)
-@@ -53,6 +53,7 @@
+index 8a161510c3a..2539675f350 100644
+--- a/cmd/kube-controller-manager/app/policy.go
++++ b/cmd/kube-controller-manager/app/policy.go
+@@ -53,6 +53,7 @@ func startDisruptionController(ctx ControllerContext) (http.Handler, bool, error
  		ctx.InformerFactory.Apps().V1().ReplicaSets(),
  		ctx.InformerFactory.Apps().V1().Deployments(),
  		ctx.InformerFactory.Apps().V1().StatefulSets(),
@@ -14,25 +22,21 @@ diff --git a/cmd/kube-controller-manager/app/policy.go b/cmd/kube-controller-man
  		client,
  		ctx.RESTMapper,
  		scaleClient,
-Index: pkg/controller/disruption/disruption.go
-IDEA additional info:
-Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
-<+>UTF-8
-===================================================================
 diff --git a/pkg/controller/disruption/disruption.go b/pkg/controller/disruption/disruption.go
---- a/pkg/controller/disruption/disruption.go	(revision 151a50e8e9872415562d9dc7b94081ef32fbef5f)
-+++ b/pkg/controller/disruption/disruption.go	(revision 1d028b69c6385bc4bcd5a678aec3186c3fae7da4)
-@@ -95,6 +95,9 @@
+index 8e2b6c99d8b..1dc6adc4760 100644
+--- a/pkg/controller/disruption/disruption.go
++++ b/pkg/controller/disruption/disruption.go
+@@ -95,6 +95,9 @@ type DisruptionController struct {
  	ssLister       appsv1listers.StatefulSetLister
  	ssListerSynced cache.InformerSynced
-
+ 
 +	dsLister       appsv1listers.DaemonSetLister
 +	dsListerSynced cache.InformerSynced
 +
  	// PodDisruptionBudget keys that need to be synced.
  	queue        workqueue.RateLimitingInterface
  	recheckQueue workqueue.DelayingInterface
-@@ -123,6 +126,7 @@
+@@ -123,6 +126,7 @@ func NewDisruptionController(
  	rsInformer appsv1informers.ReplicaSetInformer,
  	dInformer appsv1informers.DeploymentInformer,
  	ssInformer appsv1informers.StatefulSetInformer,
@@ -40,37 +44,37 @@ diff --git a/pkg/controller/disruption/disruption.go b/pkg/controller/disruption
  	kubeClient clientset.Interface,
  	restMapper apimeta.RESTMapper,
  	scaleNamespacer scaleclient.ScalesGetter,
-@@ -168,6 +172,9 @@
+@@ -168,6 +172,9 @@ func NewDisruptionController(
  	dc.ssLister = ssInformer.Lister()
  	dc.ssListerSynced = ssInformer.Informer().HasSynced
-
+ 
 +	dc.dsLister = dsInformer.Lister()
 +	dc.dsListerSynced = dsInformer.Informer().HasSynced
 +
  	dc.mapper = restMapper
  	dc.scaleNamespacer = scaleNamespacer
  	dc.discoveryClient = discoveryClient
-@@ -181,7 +188,7 @@
+@@ -181,7 +188,7 @@ func NewDisruptionController(
  // resources directly and only fall back to the scale subresource when needed.
  func (dc *DisruptionController) finders() []podControllerFinder {
  	return []podControllerFinder{dc.getPodReplicationController, dc.getPodDeployment, dc.getPodReplicaSet,
 -		dc.getPodStatefulSet, dc.getScaleController}
 +		dc.getPodStatefulSet, dc.getPodDaemonSet, dc.getScaleController}
  }
-
+ 
  var (
-@@ -189,6 +196,7 @@
+@@ -189,6 +196,7 @@ var (
  	controllerKindSS  = apps.SchemeGroupVersion.WithKind("StatefulSet")
  	controllerKindRC  = v1.SchemeGroupVersion.WithKind("ReplicationController")
  	controllerKindDep = v1beta1.SchemeGroupVersion.WithKind("Deployment")
 +	controllerKindDS  = apps.SchemeGroupVersion.WithKind("DaemonSet")
  )
-
+ 
  // getPodReplicaSet finds a replicaset which has no matching deployments.
-@@ -265,6 +273,24 @@
+@@ -265,6 +273,24 @@ func (dc *DisruptionController) getPodDeployment(controllerRef *metav1.OwnerRefe
  	return &controllerAndScale{deployment.UID, *(deployment.Spec.Replicas)}, nil
  }
-
+ 
 +// getPodDaemonSet returns the daemonset referenced by the provided controllerRef.
 +func (dc *DisruptionController) getPodDaemonSet(controllerRef *metav1.OwnerReference, namespace string) (*controllerAndScale, error) {
 +	ok, err := verifyGroupKind(controllerRef, controllerKindDS.Kind, []string{"apps"})
@@ -92,32 +96,28 @@ diff --git a/pkg/controller/disruption/disruption.go b/pkg/controller/disruption
  func (dc *DisruptionController) getPodReplicationController(controllerRef *metav1.OwnerReference, namespace string) (*controllerAndScale, error) {
  	ok, err := verifyGroupKind(controllerRef, controllerKindRC.Kind, []string{""})
  	if !ok || err != nil {
-@@ -363,7 +389,7 @@
+@@ -363,7 +389,7 @@ func (dc *DisruptionController) Run(stopCh <-chan struct{}) {
  	klog.Infof("Starting disruption controller")
  	defer klog.Infof("Shutting down disruption controller")
-
+ 
 -	if !cache.WaitForNamedCacheSync("disruption", stopCh, dc.podListerSynced, dc.pdbListerSynced, dc.rcListerSynced, dc.rsListerSynced, dc.dListerSynced, dc.ssListerSynced) {
 +	if !cache.WaitForNamedCacheSync("disruption", stopCh, dc.podListerSynced, dc.pdbListerSynced, dc.rcListerSynced, dc.rsListerSynced, dc.dListerSynced, dc.ssListerSynced, dc.dsListerSynced) {
  		return
  	}
-
-Index: pkg/controller/disruption/disruption_test.go
-IDEA additional info:
-Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
-<+>UTF-8
-===================================================================
+ 
 diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disruption/disruption_test.go
---- a/pkg/controller/disruption/disruption_test.go	(revision 151a50e8e9872415562d9dc7b94081ef32fbef5f)
-+++ b/pkg/controller/disruption/disruption_test.go	(revision 1d028b69c6385bc4bcd5a678aec3186c3fae7da4)
-@@ -134,6 +134,7 @@
+index f29433c7b89..8a78728e605 100644
+--- a/pkg/controller/disruption/disruption_test.go
++++ b/pkg/controller/disruption/disruption_test.go
+@@ -134,6 +134,7 @@ type disruptionController struct {
  	rsStore  cache.Store
  	dStore   cache.Store
  	ssStore  cache.Store
 +	dsStore  cache.Store
-
+ 
  	coreClient      *fake.Clientset
  	scaleClient     *scalefake.FakeScaleClient
-@@ -166,6 +167,7 @@
+@@ -166,6 +167,7 @@ func newFakeDisruptionController() (*disruptionController, *pdbStates) {
  		informerFactory.Apps().V1().ReplicaSets(),
  		informerFactory.Apps().V1().Deployments(),
  		informerFactory.Apps().V1().StatefulSets(),
@@ -125,15 +125,15 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
  		coreClient,
  		testrestmapper.TestOnlyStaticRESTMapper(scheme),
  		fakeScaleClient,
-@@ -178,6 +180,7 @@
+@@ -178,6 +180,7 @@ func newFakeDisruptionController() (*disruptionController, *pdbStates) {
  	dc.rsListerSynced = alwaysReady
  	dc.dListerSynced = alwaysReady
  	dc.ssListerSynced = alwaysReady
 +	dc.dsListerSynced = alwaysReady
-
+ 
  	informerFactory.Start(context.TODO().Done())
  	informerFactory.WaitForCacheSync(nil)
-@@ -190,6 +193,7 @@
+@@ -190,6 +193,7 @@ func newFakeDisruptionController() (*disruptionController, *pdbStates) {
  		informerFactory.Apps().V1().ReplicaSets().Informer().GetStore(),
  		informerFactory.Apps().V1().Deployments().Informer().GetStore(),
  		informerFactory.Apps().V1().StatefulSets().Informer().GetStore(),
@@ -141,10 +141,10 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
  		coreClient,
  		fakeScaleClient,
  		fakeDiscovery,
-@@ -277,6 +281,13 @@
+@@ -277,6 +281,13 @@ func updatePodOwnerToSs(t *testing.T, pod *v1.Pod, ss *apps.StatefulSet) {
  	pod.OwnerReferences = append(pod.OwnerReferences, controllerReference)
  }
-
+ 
 +func updatePodOwnerToDs(t *testing.T, pod *v1.Pod, ds *apps.DaemonSet) {
 +	var controllerReference metav1.OwnerReference
 +	var trueVar = true
@@ -155,10 +155,10 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
  func newPod(t *testing.T, name string) (*v1.Pod, string) {
  	pod := &v1.Pod{
  		TypeMeta: metav1.TypeMeta{APIVersion: "v1"},
-@@ -400,6 +411,32 @@
+@@ -400,6 +411,32 @@ func newStatefulSet(t *testing.T, size int32) (*apps.StatefulSet, string) {
  	return ss, ssName
  }
-
+ 
 +func newDaemonSet(t *testing.T, size int32) (*apps.DaemonSet, string) {
 +	ds := &apps.DaemonSet{
 +		TypeMeta: metav1.TypeMeta{APIVersion: "v1"},
@@ -188,10 +188,10 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
  func update(t *testing.T, store cache.Store, obj interface{}) {
  	if err := store.Update(obj); err != nil {
  		t.Fatalf("Could not add %+v to %+v: %v", obj, store, err)
-@@ -839,6 +876,37 @@
+@@ -839,6 +876,37 @@ func TestStatefulSetController(t *testing.T) {
  	}
  }
-
+ 
 +func TestDaemonSetController(t *testing.T) {
 +	labels := map[string]string{
 +		"foo": "bar",
@@ -226,20 +226,19 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
  func TestTwoControllers(t *testing.T) {
  	// Most of this test is in verifying intermediate cases as we define the
  	// three controllers and create the pods.
-@@ -992,6 +1060,8 @@
+@@ -992,6 +1060,8 @@ func TestBasicFinderFunctions(t *testing.T) {
  	add(t, dc.rcStore, rc)
  	ss, _ := newStatefulSet(t, 14)
  	add(t, dc.ssStore, ss)
 +	ds, _ := newDaemonSet(t, 13)
 +	add(t, dc.dsStore, ds)
-
+ 
  	testCases := map[string]struct {
  		finderFunc    podControllerFinder
-@@ -1052,6 +1122,23 @@
- 			name:       ss.Name,
+@@ -1053,6 +1123,23 @@ func TestBasicFinderFunctions(t *testing.T) {
  			uid:        ss.UID,
  			findsScale: false,
-+		},
+ 		},
 +		"daemonset controller with extensions group": {
 +			finderFunc:    dc.getPodDaemonSet,
 +			apiVersion:    "apps/v1",
@@ -256,6 +255,10 @@ diff --git a/pkg/controller/disruption/disruption_test.go b/pkg/controller/disru
 +			name:       ds.Name,
 +			uid:        ds.UID,
 +			findsScale: false,
- 		},
++		},
  	}
+ 
+ 	for tn, tc := range testCases {
+-- 
+2.32.0
 
