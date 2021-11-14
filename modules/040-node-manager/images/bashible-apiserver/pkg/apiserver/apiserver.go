@@ -1,9 +1,13 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -13,6 +17,8 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 
 	"d8.io/bashible/pkg/apis/bashible"
 	"d8.io/bashible/pkg/apis/bashible/install"
@@ -88,7 +94,16 @@ func (cfg *Config) Complete() CompletedConfig {
 
 // New returns a new instance of BashibleServer from the given config.
 func (c completedConfig) New() (*BashibleServer, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	genericServer, err := c.GenericConfig.New("bashible-apiserver", genericapiserver.NewEmptyDelegate())
+	if err != nil {
+		return nil, err
+	}
+
+	err = genericServer.AddPreShutdownHook("cancel-builder-context", func() error {
+		cancel()
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -99,22 +114,29 @@ func (c completedConfig) New() (*BashibleServer, error) {
 
 	// Config hardcode, could be put to `ExtraConfig`
 	const (
-		labelSelector    = "app=bashible-apiserver"
-		namespace        = "d8-cloud-instance-manager"
-		secretName       = "bashible-apiserver-context"
-		secretKey        = "context.yaml"
 		templatesRootDir = "/bashible/templates"
 		resyncTimeout    = 30 * time.Minute
 	)
 
+	clientset, err := initializeClientset()
+	if err != nil {
+		return nil, err
+	}
+
 	// Bashible context and its dynamic update
-	factory, err := newBashibleInformerFactory(resyncTimeout, namespace, labelSelector)
+	factory, err := newBashibleInformerFactory(clientset, resyncTimeout, "d8-cloud-instance-manager", "app=bashible-apiserver")
+	if err != nil {
+		panic("cannot create informer " + err.Error())
+	}
+
+	registryFactory, err := newBashibleInformerFactory(clientset, resyncTimeout, "d8-system", "app=registry")
 	if err != nil {
 		panic("cannot create informer " + err.Error())
 	}
 
 	cachesManager := bashibleregistry.NewCachesManager()
-	bashibleContext := template.NewContext(factory, secretName, secretKey, cachesManager)
+	secretUpdater := checksumSecretUpdater{clientset: clientset}
+	bashibleContext := template.NewContext(ctx, factory, registryFactory, secretUpdater, cachesManager)
 
 	// Template-based REST API
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(bashible.GroupName, Scheme, metav1.ParameterCodec, Codecs)
@@ -129,16 +151,7 @@ func (c completedConfig) New() (*BashibleServer, error) {
 
 // newBashibleInformerFactory creates informer factory for particular namespace and label selector.
 // Bashible apiserver is expected to use single namespace and only related resources.
-func newBashibleInformerFactory(resync time.Duration, namespace, labelSelector string) (informers.SharedInformerFactory, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("cannot get in-cluster config: %v", err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create kubernetes client: %v", err)
-	}
-
+func newBashibleInformerFactory(clientset *kubernetes.Clientset, resync time.Duration, namespace, labelSelector string) (informers.SharedInformerFactory, error) {
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		resync,
@@ -149,4 +162,71 @@ func newBashibleInformerFactory(resync time.Duration, namespace, labelSelector s
 	)
 
 	return factory, nil
+}
+
+func initializeClientset() (*kubernetes.Clientset, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get in-cluster config: %v", err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create kubernetes client: %v", err)
+	}
+
+	return clientset, nil
+}
+
+const (
+	configurationsSecretName      = "configuration-checksums"
+	configurationsSecretNamespace = "d8-cloud-instance-manager"
+)
+
+type checksumSecretUpdater struct {
+	clientset *kubernetes.Clientset
+}
+
+func (cs checksumSecretUpdater) OnCheckumUpdate(ngmap map[string][]byte) {
+	secretStruct := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configurationsSecretName,
+			Namespace: configurationsSecretNamespace,
+			Labels: map[string]string{
+				"app": "bashible-apiserver",
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: ngmap,
+	}
+
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		_, err := cs.clientset.CoreV1().Secrets(configurationsSecretNamespace).Get(context.Background(), configurationsSecretName, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				_, err := cs.clientset.CoreV1().Secrets(configurationsSecretNamespace).Create(context.Background(), &secretStruct, metav1.CreateOptions{})
+				if err != nil {
+					log.Printf("create '%s' secret failed: %s", configurationsSecretName, err)
+					return err
+				}
+				return nil
+			}
+
+			return err
+		}
+
+		_, err = cs.clientset.CoreV1().Secrets(configurationsSecretNamespace).Update(context.Background(), &secretStruct, metav1.UpdateOptions{})
+		if err != nil {
+			log.Printf("update '%s' secret failed: %s", configurationsSecretName, err)
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		klog.Errorf("configuration-checksum upgrade failed: %s", err)
+	}
 }

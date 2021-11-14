@@ -70,11 +70,6 @@ func (s Storage) getContext(name string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("cannot get context data: %v", err)
 	}
 
-	err = s.bashibleContext.EnrichContext(context)
-	if err != nil {
-		return nil, err
-	}
-
 	return context, nil
 }
 

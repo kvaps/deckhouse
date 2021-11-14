@@ -44,7 +44,6 @@ func (s *StepsStorage) Render(templateContext map[string]interface{}) (map[strin
 
 	steps := map[string]string{}
 	for name, content := range templates {
-
 		step, err := RenderTemplate(name, content, templateContext)
 		if err != nil {
 			return nil, fmt.Errorf("cannot render template \"%s\" for bundle \"%s\": %v", name, bundle, err)
@@ -57,7 +56,6 @@ func (s *StepsStorage) Render(templateContext map[string]interface{}) (map[strin
 
 func (s *StepsStorage) readBundleTemplates(bundle string) (map[string][]byte, error) {
 	templates := map[string][]byte{}
-
 	for _, dir := range s.lookupDirs(bundle) {
 
 		err := readTemplates(dir, templates)
