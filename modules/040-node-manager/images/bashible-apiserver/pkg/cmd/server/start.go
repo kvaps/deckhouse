@@ -69,7 +69,7 @@ func NewCommandStartBashibleServer(defaults *BashibleServerOptions, stopCh <-cha
 
 // Validate validates BashibleServerOptions
 func (o BashibleServerOptions) Validate(args []string) error {
-	errors := []error{}
+	errors := make([]error, 0)
 	errors = append(errors, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errors)
 }
