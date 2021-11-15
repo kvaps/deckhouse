@@ -16,10 +16,42 @@ package ssh
 
 import (
 	"fmt"
+	"sync"
+
+	"github.com/deckhouse/deckhouse/dhctl/pkg/app"
+	"github.com/deckhouse/deckhouse/dhctl/pkg/util/tomb"
 
 	"github.com/deckhouse/deckhouse/dhctl/pkg/system/ssh/frontend"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/system/ssh/session"
 )
+
+var (
+	lock          = sync.Mutex{}
+	agentInstance *frontend.Agent
+)
+
+func initAgentInstance() (*frontend.Agent, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if agentInstance == nil {
+		inst := frontend.NewAgent(&session.AgentSettings{
+			PrivateKeys: app.SSHPrivateKeys,
+		})
+
+		err := inst.Start()
+		if err != nil {
+			return nil, err
+		}
+		tomb.RegisterOnShutdown("Stop ssh-agent", func() {
+			agentInstance.Stop()
+		})
+
+		agentInstance = inst
+	}
+
+	return agentInstance, nil
+}
 
 type Client struct {
 	Settings *session.Session
@@ -30,8 +62,15 @@ func (s *Client) Start() (*Client, error) {
 	if s.Settings == nil {
 		return nil, fmt.Errorf("possible bug in ssh client: session should be created before start")
 	}
-	s.Agent = frontend.NewAgent(s.Settings)
-	return s, s.Agent.Start()
+
+	a, err := initAgentInstance()
+	if err != nil {
+		return nil, err
+	}
+	s.Agent = a
+	s.Settings.AgentSettings = s.Agent.AgentSettings
+
+	return s, nil
 }
 
 // Easy access to frontends
@@ -64,4 +103,10 @@ func (s *Client) UploadScript(scriptPath string, args ...string) *frontend.Uploa
 // UploadScript is used to upload script and execute it on remote server
 func (s *Client) Check() *frontend.Check {
 	return frontend.NewCheck(s.Settings)
+}
+
+// Stop stop client
+func (s *Client) Stop() {
+	// do nothing
+	// stop agent on shutdown because agent is singleton
 }

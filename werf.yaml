@@ -456,9 +456,13 @@ ansible:
 ---
 image: dhctl-tests
 fromImage: base-for-go
+fromCacheVersion: "20211210"
 git:
 - add: /dhctl
   to: /dhctl
+  stageDependencies:
+    install:
+      - go.sum
 ansible:
   beforeInstall:
     - apk:
