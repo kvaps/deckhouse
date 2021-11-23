@@ -24,15 +24,6 @@ else
 fi
 
 case "$kubernetes_version" in
-  1.16.*)
-    kubectl_version="1.17"
-    ;;
-  1.17.*)
-    kubectl_version="1.17"
-    ;;
-  1.18.*)
-    kubectl_version="1.17"
-    ;;
   1.19.*)
     kubectl_version="1.20"
     ;;
@@ -40,6 +31,9 @@ case "$kubernetes_version" in
     kubectl_version="1.20"
     ;;
   1.21.*)
+    kubectl_version="1.20"
+    ;;
+  1.22.*)
     kubectl_version="1.20"
     ;;
   *)
