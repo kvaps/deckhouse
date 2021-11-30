@@ -111,6 +111,7 @@ type ElasticsearchSpec struct {
 
 	Index    string `json:"index,omitempty"`
 	Pipeline string `json:"pipeline,omitempty"`
+	Type     string `json:"type,omitempty"`
 
 	Auth          ElasticsearchAuthSpec          `json:"auth,omitempty"`
 	IndexSettings ElasticsearchIndexSettingsSpec `json:"indexSettings,omitempty"`
