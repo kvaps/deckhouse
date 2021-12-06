@@ -36,4 +36,5 @@ locals {
   network_security = lookup(var.providerClusterConfiguration.standardWithNoRouter, "internalNetworkSecurity", true)
   image_name = var.providerClusterConfiguration.masterNodeGroup.instanceClass.imageName
   tags = lookup(var.providerClusterConfiguration, "tags", {})
+  cross_zone_volume_types = lookup(var.providerClusterConfiguration, "crossZoneVolumeTypes", true)
 }

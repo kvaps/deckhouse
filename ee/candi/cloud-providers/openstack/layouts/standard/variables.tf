@@ -28,12 +28,13 @@ variable "clusterUUID" {
 }
 
 locals {
-  prefix                = var.clusterConfiguration.cloud.prefix
-  standard              = lookup(var.providerClusterConfiguration, "standard", {})
-  pod_subnet_cidr       = var.clusterConfiguration.podSubnetCIDR
-  internal_network_cidr = var.providerClusterConfiguration.standard.internalNetworkCIDR
-  external_network_name = var.providerClusterConfiguration.standard.externalNetworkName
-  network_security      = lookup(var.providerClusterConfiguration.standard, "internalNetworkSecurity", true)
-  image_name            = var.providerClusterConfiguration.masterNodeGroup.instanceClass.imageName
-  tags                  = lookup(var.providerClusterConfiguration, "tags", {})
+  prefix                  = var.clusterConfiguration.cloud.prefix
+  standard                = lookup(var.providerClusterConfiguration, "standard", {})
+  pod_subnet_cidr         = var.clusterConfiguration.podSubnetCIDR
+  internal_network_cidr   = var.providerClusterConfiguration.standard.internalNetworkCIDR
+  external_network_name   = var.providerClusterConfiguration.standard.externalNetworkName
+  network_security        = lookup(var.providerClusterConfiguration.standard, "internalNetworkSecurity", true)
+  image_name              = var.providerClusterConfiguration.masterNodeGroup.instanceClass.imageName
+  tags                    = lookup(var.providerClusterConfiguration, "tags", {})
+  cross_zone_volume_types = lookup(var.providerClusterConfiguration, "crossZoneVolumeTypes", true)
 }

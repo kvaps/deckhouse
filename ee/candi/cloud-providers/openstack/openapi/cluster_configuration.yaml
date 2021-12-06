@@ -25,6 +25,14 @@ apiVersions:
 
           You have to re-create all the machines to add new tags if tags were modified in the running cluster.
         x-doc-required: false
+      crossZoneVolumeTypes:
+        type: boolean
+        default: true
+        x-doc-required: false
+        description: |
+          Specifies whether volumes with types described in the configuration can migrate between availability zones.
+
+          If there is a separate volume type for every availability zone, then this value can be skipped.
       zones:
         type: array
         items:

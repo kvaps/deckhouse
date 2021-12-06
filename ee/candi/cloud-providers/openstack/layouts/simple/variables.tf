@@ -31,4 +31,5 @@ locals {
   pod_network_mode = lookup(var.providerClusterConfiguration.simple, "podNetworkMode", "VXLAN")
   image_name = var.providerClusterConfiguration.masterNodeGroup.instanceClass.imageName
   tags = lookup(var.providerClusterConfiguration, "tags", {})
+  cross_zone_volume_types = lookup(var.providerClusterConfiguration, "crossZoneVolumeTypes", true)
 }

@@ -44,6 +44,7 @@ resource "openstack_blockstorage_volume_v2" "volume" {
   size = local.root_disk_size
   image_id = data.openstack_images_image_v2.image.id
   metadata = local.metadata_tags
+  availability_zone = local.cross_zone_volume_types ? "" : element(local.zones, var.nodeIndex)
   lifecycle {
     ignore_changes = [
       metadata,
