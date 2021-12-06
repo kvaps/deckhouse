@@ -61,18 +61,6 @@ spec:
     - sourceLabels: [container]
       regex: '^$'
       action: drop
-    - sourceLabels: [pod_name]
-      regex: '^$'
-      action: drop
-    - sourceLabels: [container_name]
-      separator: ""
-      regex: '^$'
-      action: drop
-    - sourceLabels: [container_name]
-      targetLabel: container
-    - sourceLabels: [pod_name]
-      targetLabel: pod
-    {{- end }}
     - regex: container_name|pod_name|id|image|name
       action: labeldrop
   - port: https-metrics
