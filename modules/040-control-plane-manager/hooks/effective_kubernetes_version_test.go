@@ -235,7 +235,7 @@ var _ = Describe("Modules :: controler-plane-manager :: hooks :: get_pki_checksu
 				input{
 					nodeVersions:               []string{"v1.20.10", "v1.20.3", "v1.20.5", "v1.20.2"},
 					maxUsedControlPlaneVersion: "1.21",
-					configVersion:              "1.18",
+					configVersion:              "1.19",
 					controlPlaneVersions:       []string{"1.21", "1.21", "1.21"},
 				},
 				output{
@@ -247,7 +247,7 @@ var _ = Describe("Modules :: controler-plane-manager :: hooks :: get_pki_checksu
 				input{
 					nodeVersions:               []string{"v1.19.4", "v1.19.3", "v1.19.5", "v1.19.2"},
 					maxUsedControlPlaneVersion: "1.21",
-					configVersion:              "1.18",
+					configVersion:              "1.19",
 					controlPlaneVersions:       []string{"1.20", "1.20", "1.20"},
 				},
 				output{
@@ -259,7 +259,7 @@ var _ = Describe("Modules :: controler-plane-manager :: hooks :: get_pki_checksu
 				input{
 					nodeVersions:               []string{"v1.19.4", "v1.19.3", "v1.19.5", "v1.19.2"},
 					maxUsedControlPlaneVersion: "1.22",
-					configVersion:              "1.18",
+					configVersion:              "1.19",
 					controlPlaneVersions:       []string{"1.20", "1.20", "1.20"},
 				},
 				output{

@@ -88,7 +88,7 @@ if [[ -f $ROOTFS_DIR/etc/kubernetes/deckhouse/last_applied_configuration_checksu
 fi
 
 # verify Kubernetes version
-declare -A supported_kubernetes_versions=( ["1.16"]="1.16" ["1.17"]="1.17" ["1.18"]="1.18" ["1.19"]="1.19" ["1.20"]="1.20" ["1.21"]="1.21")
+declare -A supported_kubernetes_versions=( ["1.19"]="1.19" ["1.20"]="1.20" ["1.21"]="1.21" ["1.22"]="1.22" )
 if [[ -z "${supported_kubernetes_versions[$KUBERNETES_VERSION]}" ]]; then
   echo " * Kubernetes version v$KUBERNETES_VERSION is not supported"
   exit 1
@@ -316,16 +316,8 @@ function converge_component() {
   manifest=$ROOTFS_DIR/etc/kubernetes/manifests/$component.yaml
   tmp_manifest=$TMP_ROOTFS_DIR/etc/kubernetes/manifests/$component.yaml
 
-  case $KUBERNETES_VERSION in
-    1.16 | 1.17 | 1.18)
-      experimental_option="--experimental-kustomize"
-      checksum_patch=$ROOTFS_DIR/etc/kubernetes/deckhouse/kubeadm/patches/999-${component}-checksum.yaml
-      ;;
-    *)
-      experimental_option="--experimental-patches"
-      checksum_patch=$ROOTFS_DIR/etc/kubernetes/deckhouse/kubeadm/patches/${component}999checksum.yaml
-      ;;
-  esac
+  experimental_option="--experimental-patches"
+  checksum_patch=$ROOTFS_DIR/etc/kubernetes/deckhouse/kubeadm/patches/${component}999checksum.yaml
 
   if [[ "$component" != "etcd" ]] ; then
     kubeadm_cmd="$kubeadm_binary init phase control-plane ${component#kube-} --config $ROOTFS_DIR/etc/kubernetes/deckhouse/kubeadm/config.yaml ${experimental_option} $ROOTFS_DIR/etc/kubernetes/deckhouse/kubeadm/patches/"
