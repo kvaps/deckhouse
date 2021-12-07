@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
+	certificatesV1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/deckhouse/deckhouse/go_lib/certificate"
@@ -58,11 +58,11 @@ var _ = Describe("Modules :: common :: hooks :: order_certificate_test", func() 
 		})
 
 		It("Should generate approved CSR and exit with error", func() {
-			csr, err := dependency.TestDC.K8sClient.CertificatesV1beta1().
+			csr, err := dependency.TestDC.K8sClient.CertificatesV1().
 				CertificateSigningRequests().
 				Get(context.TODO(), "d8-module-name:module-name:auth", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1beta1.CertificateApproved))
+			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesV1.CertificateApproved))
 
 			Expect(f).ToNot(ExecuteSuccessfully())
 		})
@@ -121,9 +121,9 @@ type: Opaque
 		})
 
 		It("Should exit with an error (issue new certificate)", func() {
-			csr, err := dependency.TestDC.K8sClient.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), "d8-module-name:module-name:auth", metav1.GetOptions{})
+			csr, err := dependency.TestDC.K8sClient.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), "d8-module-name:module-name:auth", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1beta1.CertificateApproved))
+			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesV1.CertificateApproved))
 
 			Expect(f).ToNot(ExecuteSuccessfully())
 		})
