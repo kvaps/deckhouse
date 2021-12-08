@@ -276,10 +276,10 @@ func IssueCertificate(input *go_hook.HookInput, dc dependency.Container, request
 	// Add CSR approved status.
 	csr.Status.Conditions = append(csr.Status.Conditions,
 		certificatesv1.CertificateSigningRequestCondition{
-			Type:           certificatesv1.CertificateApproved,
-			Reason:         "HookApprove",
-			Message:        "This CSR was approved by a hook.",
-			LastUpdateTime: metav1.Now(),
+			Type:    certificatesv1.CertificateApproved,
+			Status:  v1.ConditionTrue,
+			Reason:  "HookApprove",
+			Message: "This CSR was approved by a hook.",
 		})
 
 	// Approve CSR.
