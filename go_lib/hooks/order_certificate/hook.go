@@ -73,6 +73,7 @@ type OrderCertificateRequest struct {
 	SANs       []string
 	Groups     []string
 	Usages     []certificatesv1.KeyUsage
+	SignerName string
 
 	ValueName   string
 	ModuleName  string
@@ -236,6 +237,10 @@ func IssueCertificate(input *go_hook.HookInput, dc dependency.Container, request
 		}
 	}
 
+	if request.SignerName == "" {
+		request.SignerName = certificatesv1.KubeAPIServerClientSignerName
+	}
+
 	// Delete existing CSR from the cluster.
 	_ = k8.CertificatesV1().CertificateSigningRequests().Delete(context.TODO(), request.CommonName, metav1.DeleteOptions{})
 
@@ -258,7 +263,7 @@ func IssueCertificate(input *go_hook.HookInput, dc dependency.Container, request
 		Spec: certificatesv1.CertificateSigningRequestSpec{
 			Request:    csrPEM,
 			Usages:     request.Usages,
-			SignerName: certificatesv1.KubeAPIServerClientSignerName,
+			SignerName: request.SignerName,
 		},
 	}
 
@@ -276,10 +281,6 @@ func IssueCertificate(input *go_hook.HookInput, dc dependency.Container, request
 			Message:        "This CSR was approved by a hook.",
 			LastUpdateTime: metav1.Now(),
 		})
-	_, err = k8.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csr, metav1.UpdateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error updating status of CertificateSigningRequest: %v", err)
-	}
 
 	// Approve CSR.
 	_, err = k8.CertificatesV1().CertificateSigningRequests().UpdateApproval(context.TODO(), request.CommonName, csr, metav1.UpdateOptions{})
