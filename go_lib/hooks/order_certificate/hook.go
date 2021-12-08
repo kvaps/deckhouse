@@ -229,7 +229,7 @@ func IssueCertificate(input *go_hook.HookInput, dc dependency.Container, request
 		request.WaitTimeout = certificateWaitTimeoutDefault
 	}
 
-	if request.Usages == nil {
+	if len(request.Usages) == 0 {
 		request.Usages = []certificatesv1.KeyUsage{
 			certificatesv1.UsageDigitalSignature,
 			certificatesv1.UsageKeyEncipherment,
