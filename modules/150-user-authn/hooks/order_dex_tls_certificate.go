@@ -39,6 +39,7 @@ var _ = order_certificate.RegisterOrderCertificateHook(
 				certificatesv1.UsageKeyEncipherment,
 				certificatesv1.UsageServerAuth,
 			},
+			SignerName: certificatesv1.KubeletServingSignerName,
 			ValueName:  "internal.dexTLS",
 			ModuleName: "userAuthn",
 		},
