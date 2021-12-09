@@ -18,7 +18,7 @@ docker:
   ENTRYPOINT: ["/usr/local/bin/cloud-controller-manager"]
 ---
 artifact: {{ $.ModuleName }}/{{ $.ImageName }}-artifact-{{ $version | replace "." "-" }}
-    {{- if semverCompare "<1.22" $version }}
+    {{- if semverCompare "<=1.22" $version }}
 from: {{ env "BASE_GOLANG_ALPINE" }}
     {{- else }}
 from: {{ env "BASE_GOLANG_16_ALPINE" }}
@@ -32,7 +32,7 @@ shell:
     - cd /src
       {{- if semverCompare "<1.20" $version }}
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o gcp-cloud-controller-manager cmd/cloud-controller-manager/controller-manager.go
-      {{- else if semverCompare "<1.22" $version }}
+      {{- else if semverCompare "<=1.22" $version }}
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o gcp-cloud-controller-manager cmd/cloud-controller-manager/main.go
       {{- else }}
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o gcp-cloud-controller-manager cmd/cloud-controller-manager/main.go cmd/cloud-controller-manager/nodeipamcontroller.go
