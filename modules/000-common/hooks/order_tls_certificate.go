@@ -17,8 +17,9 @@ limitations under the License.
 package hooks
 
 import (
-	certificatesv1 "k8s.io/api/certificates/v1"
 	"time"
+
+	certificatesv1 "k8s.io/api/certificates/v1"
 
 	"github.com/deckhouse/deckhouse/go_lib/hooks/order_certificate"
 )
