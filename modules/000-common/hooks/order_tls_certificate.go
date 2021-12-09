@@ -18,6 +18,7 @@ package hooks
 
 import (
 	certificatesv1 "k8s.io/api/certificates/v1"
+	"time"
 
 	"github.com/deckhouse/deckhouse/go_lib/hooks/order_certificate"
 )
@@ -25,24 +26,23 @@ import (
 var _ = order_certificate.RegisterOrderCertificateHook(
 	[]order_certificate.OrderCertificateRequest{
 		{
-			Namespace:  "d8-user-authn",
-			SecretName: "dex-tls",
-			CommonName: "system:node:dex.d8-user-authn",
+			Namespace:  "d8-module-name",
+			SecretName: "module-name-tls",
+			CommonName: "system:node:module-name.d8-module-name",
 			SANs: []string{
-				"dex.d8-user-authn",
-				"dex.d8-user-authn.svc",
-				order_certificate.ClusterDomainSAN("dex.d8-user-authn.svc"),
-				order_certificate.PublicDomainSAN("dex"),
+				"module-name.d8-module-name",
+				"module-name.d8-module-name.svc",
 			},
 			Usages: []certificatesv1.KeyUsage{
 				certificatesv1.UsageDigitalSignature,
 				certificatesv1.UsageKeyEncipherment,
 				certificatesv1.UsageServerAuth,
 			},
-			Groups:     []string{"system:nodes"},
-			SignerName: certificatesv1.KubeletServingSignerName,
-			ValueName:  "internal.dexTLS",
-			ModuleName: "userAuthn",
+			Groups:      []string{"system:nodes"},
+			SignerName:  certificatesv1.KubeletServingSignerName,
+			ValueName:   "internal.moduleTLS",
+			ModuleName:  "moduleName",
+			WaitTimeout: 1 * time.Millisecond,
 		},
 	},
 )

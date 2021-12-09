@@ -35,7 +35,7 @@ import (
 	. "github.com/deckhouse/deckhouse/testing/hooks"
 )
 
-var _ = Describe("Modules :: common :: hooks :: order_certificate_test", func() {
+var _ = Describe("Modules :: common :: hooks :: order_tls_certificate", func() {
 	f := HookExecutionConfigInit(`{"global":{},"moduleName":{"internal":{}}}`, `{}`)
 
 	var log = logrus.New()
@@ -44,10 +44,11 @@ var _ = Describe("Modules :: common :: hooks :: order_certificate_test", func() 
 	var logEntry = log.WithContext(context.TODO())
 
 	selfSignedCA, _ := certificate.GenerateCA(logEntry, "kubernetes")
-	cert, _ := certificate.GenerateSelfSignedCert(logEntry,
-		"d8-module-name:module-name:auth",
+	tlsCert, _ := certificate.GenerateSelfSignedCert(logEntry,
+		"system:node:module-name.d8-module-name",
 		selfSignedCA,
-		certificate.WithGroups("prometheus:auth"),
+		certificate.WithGroups("system:nodes"),
+		certificate.WithSANs("module-name.d8-module-name", "module-name.d8-module-name.svc"),
 	)
 	incorrectCert, _ := certificate.GenerateSelfSignedCert(logEntry, "test", selfSignedCA)
 
@@ -60,14 +61,15 @@ var _ = Describe("Modules :: common :: hooks :: order_certificate_test", func() 
 		It("Should generate approved CSR and exit with error", func() {
 			csr, err := dependency.TestDC.K8sClient.CertificatesV1().
 				CertificateSigningRequests().
-				Get(context.TODO(), "d8-module-name:module-name:auth", metav1.GetOptions{})
+				Get(context.TODO(), "system:node:module-name.d8-module-name", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
 			Expect(csr.Spec.Usages).To(Equal([]certificatesv1.KeyUsage{
 				certificatesv1.UsageDigitalSignature,
 				certificatesv1.UsageKeyEncipherment,
-				certificatesv1.UsageClientAuth,
+				certificatesv1.UsageServerAuth,
 			}))
+			Expect(csr.Spec.SignerName).To(Equal(certificatesv1.KubeletServingSignerName))
 
 			Expect(f).ToNot(ExecuteSuccessfully())
 		})
@@ -75,7 +77,7 @@ var _ = Describe("Modules :: common :: hooks :: order_certificate_test", func() 
 
 	Context("Cluster with correct certificate", func() {
 		BeforeEach(func() {
-			tlsAuthSecret := fmt.Sprintf(`
+			tlsSecret := fmt.Sprintf(`
 ---
 apiVersion: v1
 data:
@@ -83,21 +85,21 @@ data:
   tls.key: %s
 kind: Secret
 metadata:
-  name: module-name-auth-tls
+  name: module-name-tls
   namespace: d8-module-name
 type: Opaque
-`, base64.StdEncoding.EncodeToString([]byte(cert.Cert)), base64.StdEncoding.EncodeToString([]byte(cert.Key)))
-			f.BindingContexts.Set(f.KubeStateSet(tlsAuthSecret))
+`, base64.StdEncoding.EncodeToString([]byte(tlsCert.Cert)), base64.StdEncoding.EncodeToString([]byte(tlsCert.Key)))
+			f.BindingContexts.Set(f.KubeStateSet(tlsSecret))
 			f.RunHook()
 		})
 
 		It("Should persist certs and keys", func() {
 			Expect(f).To(ExecuteSuccessfully())
 
-			Expect(f.ValuesGet("moduleName.internal.moduleAuthTLS.certificate_updated").Exists()).To(BeFalse())
-			Expect(f.ValuesGet("moduleName.internal.moduleAuthTLS.key").Exists()).To(BeTrue())
+			Expect(f.ValuesGet("moduleName.internal.moduleTLS.certificate_updated").Exists()).To(BeFalse())
+			Expect(f.ValuesGet("moduleName.internal.moduleTLS.key").Exists()).To(BeTrue())
 
-			certFromValues := f.ValuesGet("moduleName.internal.moduleAuthTLS.certificate").String()
+			certFromValues := f.ValuesGet("moduleName.internal.moduleTLS.certificate").String()
 			parsedCert, err := helpers.ParseCertificatePEM([]byte(certFromValues))
 			if err != nil {
 				fmt.Printf("certificate parsing error: %v", err)
@@ -109,7 +111,7 @@ type: Opaque
 
 	Context("Cluster with incorrect certificate", func() {
 		BeforeEach(func() {
-			tlsAuthSecret := fmt.Sprintf(`
+			tlsSecret := fmt.Sprintf(`
 ---
 apiVersion: v1
 data:
@@ -117,16 +119,16 @@ data:
   tls.key: %s
 kind: Secret
 metadata:
-  name: module-name-auth-tls
+  name: module-name-tls
   namespace: d8-module-name
 type: Opaque
-`, base64.StdEncoding.EncodeToString([]byte(incorrectCert.Cert)), base64.StdEncoding.EncodeToString([]byte(cert.Key)))
-			f.BindingContexts.Set(f.KubeStateSet(tlsAuthSecret))
+`, base64.StdEncoding.EncodeToString([]byte(incorrectCert.Cert)), base64.StdEncoding.EncodeToString([]byte(incorrectCert.Key)))
+			f.BindingContexts.Set(f.KubeStateSet(tlsSecret))
 			f.RunHook()
 		})
 
 		It("Should exit with an error (issue new certificate)", func() {
-			csr, err := dependency.TestDC.K8sClient.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), "d8-module-name:module-name:auth", metav1.GetOptions{})
+			csr, err := dependency.TestDC.K8sClient.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), "system:node:module-name.d8-module-name", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(csr.Status.Conditions[0].Type).To(Equal(certificatesv1.CertificateApproved))
 

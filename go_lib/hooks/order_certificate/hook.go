@@ -85,6 +85,7 @@ func (r *OrderCertificateRequest) DeepCopy() OrderCertificateRequest {
 		Namespace:  r.Namespace,
 		SecretName: r.SecretName,
 		CommonName: r.CommonName,
+		SignerName: r.SignerName,
 		SANs:       append(make([]string, 0, len(r.SANs)), r.SANs...),
 		Groups:     append(make([]string, 0, len(r.Groups)), r.Groups...),
 		Usages:     append(make([]certificatesv1.KeyUsage, 0, len(r.Usages)), r.Usages...),
