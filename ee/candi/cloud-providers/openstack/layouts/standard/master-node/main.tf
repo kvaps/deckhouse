@@ -34,7 +34,7 @@ module "master" {
   tags                = local.tags
   zone                = local.zone
   volume_type         = local.volume_type
-  volume_zone = local.volume_zone
+  volume_zone         = local.volume_zone
 }
 
 module "kubernetes_data" {
