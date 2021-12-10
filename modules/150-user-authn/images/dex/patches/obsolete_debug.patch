@@ -2080,7 +2080,7 @@ index 2a4f8c71..acbf4ecb
  	}
 
 diff --git a/server/refreshhandlers.go b/server/refreshhandlers.go
-index 8ea7ea9e..b22e9fcd 100644
+index 8ea7ea9e..41a862fa 100644
 --- a/server/refreshhandlers.go
 +++ b/server/refreshhandlers.go
 @@ -57,6 +57,7 @@ func (s *Server) extractRefreshTokenFromRequest(r *http.Request) (*internal.Refr
@@ -2125,7 +2125,26 @@ index 8ea7ea9e..b22e9fcd 100644
  	}
 
  	expiredErr := newBadRequestError("Refresh token expired.")
-@@ -227,37 +235,54 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -215,6 +223,18 @@ func (s *Server) updateOfflineSession(refresh *storage.RefreshToken, ident conne
+ 	return nil
+ }
+
++func enrichClaimsFromIdentity(token storage.RefreshToken, ident connector.Identity) storage.RefreshToken {
++	token.Claims.Username = ident.Username
++	token.Claims.PreferredUsername = ident.PreferredUsername
++	token.Claims.Email = ident.Email
++	token.Claims.EmailVerified = ident.EmailVerified
++	token.Claims.Groups = ident.Groups
++
++	// ConnectorData has been moved to OfflineSession
++	token.ConnectorData = []byte{}
++	return token
++}
++
+ // updateRefreshToken updates refresh token and offline session in the storage
+ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *storage.RefreshToken, ident connector.Identity) (*internal.RefreshToken, *refreshError) {
+ 	newToken := token
+@@ -227,38 +247,36 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
 
  	lastUsed := s.now()
 
@@ -2145,32 +2164,18 @@ index 8ea7ea9e..b22e9fcd 100644
 -			}
 -
 -			old.ObsoleteToken = old.Token
-+		updateTokenIdentity := func() {
-+			// Update the claims of the refresh token.
-+			//
-+			// UserID intentionally ignored for now.
-+			old.Claims.Username = ident.Username
-+			old.Claims.PreferredUsername = ident.PreferredUsername
-+			old.Claims.Email = ident.Email
-+			old.Claims.EmailVerified = ident.EmailVerified
-+			old.Claims.Groups = ident.Groups
-+
-+			// ConnectorData has been moved to OfflineSession
-+			old.ConnectorData = []byte{}
- 		}
-
 +		reuseAllowed := s.refreshTokenPolicy.AllowedToReuse(old.LastUsed)
-+		if !reuseAllowed {
++		if reuseAllowed {
 +			// Update the last used time field only out of reuse time window
 +			//  to avoid unnecessary storage interactions, that can lead to conflict errors
 +			//  for concurrent requests
-+			old.LastUsed = lastUsed
++			lastUsed = old.LastUsed
 +		}
 +
 +		// Return the token with updated identity and last used time if rotation is disabled
 +		if !s.refreshTokenPolicy.RotationEnabled() {
-+			updateTokenIdentity()
-+			return old, nil
++			old.LastUsed = lastUsed
++			return enrichClaimsFromIdentity(old, ident), nil
 +		}
 +
 +		if reuseAllowed && (old.ObsoleteToken == token.Token || old.Token == token.Token) {
@@ -2181,14 +2186,8 @@ index 8ea7ea9e..b22e9fcd 100644
 +
 +		if old.Token != token.Token {
 +			return old, errors.New("refresh token claimed twice")
-+		}
-+
-+		if s.refreshTokenPolicy.AllowedToReuse(old.LastUsed) && old.ObsoleteToken == token.Token {
-+			// Do not update last used time for offline session if token is allowed to be reused
-+			return old, nil
-+		}
-+
-+		updateTokenIdentity()
+ 		}
+
 +		old.ObsoleteToken = old.Token
  		old.Token = newToken.Token
 -		// Update the claims of the refresh token.
@@ -2199,15 +2198,16 @@ index 8ea7ea9e..b22e9fcd 100644
 -		old.Claims.Email = ident.Email
 -		old.Claims.EmailVerified = ident.EmailVerified
 -		old.Claims.Groups = ident.Groups
--		old.LastUsed = lastUsed
--
+ 		old.LastUsed = lastUsed
+
 -		// ConnectorData has been moved to OfflineSession
 -		old.ConnectorData = []byte{}
-+
- 		return old, nil
+-		return old, nil
++		return enrichClaimsFromIdentity(old, ident), nil
  	}
 
-@@ -268,6 +293,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+ 	// Update refresh token in the storage.
+@@ -268,6 +286,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
  		return nil, newInternalServerError()
  	}
 
