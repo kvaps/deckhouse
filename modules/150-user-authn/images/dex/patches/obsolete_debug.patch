@@ -2080,7 +2080,7 @@ index 2a4f8c71..acbf4ecb
  	}
 
 diff --git a/server/refreshhandlers.go b/server/refreshhandlers.go
-index 8ea7ea9e..570c6247 100644
+index 8ea7ea9e..b22e9fcd 100644
 --- a/server/refreshhandlers.go
 +++ b/server/refreshhandlers.go
 @@ -57,6 +57,7 @@ func (s *Server) extractRefreshTokenFromRequest(r *http.Request) (*internal.Refr
@@ -2125,7 +2125,7 @@ index 8ea7ea9e..570c6247 100644
  	}
 
  	expiredErr := newBadRequestError("Refresh token expired.")
-@@ -227,37 +235,52 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -227,37 +235,54 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
 
  	lastUsed := s.now()
 
@@ -2157,16 +2157,16 @@ index 8ea7ea9e..570c6247 100644
 +
 +			// ConnectorData has been moved to OfflineSession
 +			old.ConnectorData = []byte{}
-+		}
-+
+ 		}
+
 +		reuseAllowed := s.refreshTokenPolicy.AllowedToReuse(old.LastUsed)
 +		if !reuseAllowed {
 +			// Update the last used time field only out of reuse time window
 +			//  to avoid unnecessary storage interactions, that can lead to conflict errors
 +			//  for concurrent requests
 +			old.LastUsed = lastUsed
- 		}
-
++		}
++
 +		// Return the token with updated identity and last used time if rotation is disabled
 +		if !s.refreshTokenPolicy.RotationEnabled() {
 +			updateTokenIdentity()
@@ -2189,6 +2189,7 @@ index 8ea7ea9e..570c6247 100644
 +		}
 +
 +		updateTokenIdentity()
++		old.ObsoleteToken = old.Token
  		old.Token = newToken.Token
 -		// Update the claims of the refresh token.
 -		//
@@ -2202,10 +2203,11 @@ index 8ea7ea9e..570c6247 100644
 -
 -		// ConnectorData has been moved to OfflineSession
 -		old.ConnectorData = []byte{}
++
  		return old, nil
  	}
 
-@@ -268,6 +291,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -268,6 +293,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
  		return nil, newInternalServerError()
  	}
 
