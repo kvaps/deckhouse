@@ -10,7 +10,7 @@ RUN git clone https://github.com/oauth2-proxy/oauth2-proxy.git . \
  && git checkout v7.2.0
 ADD cookie-refresh.patch /
 RUN patch -p1 < /cookie-refresh.patch \
-  && make build && ls -lah && pwd
+  && make build
 
 FROM $BASE_ALPINE
 RUN apk --update add curl bash  ca-certificates && update-ca-certificates
