@@ -1,5 +1,5 @@
 diff --git a/pkg/sessions/persistence/manager.go b/pkg/sessions/persistence/manager.go
-index 3215b25..1b0e716 100644
+index 3215b25..375d124 100644
 --- a/pkg/sessions/persistence/manager.go
 +++ b/pkg/sessions/persistence/manager.go
 @@ -33,12 +33,14 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
@@ -18,7 +18,7 @@ index 3215b25..1b0e716 100644
  	}
 
  	err = tckt.saveSession(s, func(key string, val []byte, exp time.Duration) error {
-@@ -54,23 +56,25 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
+@@ -54,23 +56,28 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
  // Load reads sessions.SessionState information from a session store. It will
  // use the session ticket from the http.Request's cookie.
  func (m *Manager) Load(req *http.Request) (*sessions.SessionState, error) {
@@ -35,7 +35,10 @@ index 3215b25..1b0e716 100644
  		},
  		m.Store.Lock,
  	)
-+	state.RefreshToken = refreshToken
++
++	if state != nil {
++		state.RefreshToken = refreshToken
++	}
 +	return state, err
  }
 
