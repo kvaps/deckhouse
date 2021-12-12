@@ -2080,7 +2080,7 @@ index 2a4f8c71..acbf4ecb
  	}
 
 diff --git a/server/refreshhandlers.go b/server/refreshhandlers.go
-index 8ea7ea9e..d875ba1e 100644
+index 8ea7ea9e..06c985a1 100644
 --- a/server/refreshhandlers.go
 +++ b/server/refreshhandlers.go
 @@ -57,6 +57,7 @@ func (s *Server) extractRefreshTokenFromRequest(r *http.Request) (*internal.Refr
@@ -2091,7 +2091,7 @@ index 8ea7ea9e..d875ba1e 100644
  	return token, nil
  }
 
-@@ -76,19 +77,28 @@ func (s *Server) getRefreshTokenFromStorage(clientID string, token *internal.Ref
+@@ -76,16 +77,24 @@ func (s *Server) getRefreshTokenFromStorage(clientID string, token *internal.Ref
 
  	if refresh.ClientID != clientID {
  		s.logger.Errorf("client %s trying to claim token for client %s", clientID, refresh.ClientID)
@@ -2101,6 +2101,7 @@ index 8ea7ea9e..d875ba1e 100644
 +		return nil, &refreshError{msg: errInvalidGrant, desc: invalidErr.desc, code: http.StatusBadRequest}
  	}
 
++	s.logger.Debugf("refresh token: token: %s, obsolete: %s, last_used: %s", refresh.Token, refresh.ObsoleteToken, refresh.LastUsed)
  	if refresh.Token != token.Token {
 -		switch {
 -		case !s.refreshTokenPolicy.AllowedToReuse(refresh.LastUsed):
@@ -2108,13 +2109,6 @@ index 8ea7ea9e..d875ba1e 100644
 -		case refresh.ObsoleteToken != token.Token:
 -			fallthrough
 -		case refresh.ObsoleteToken == "":
-+		s.logger.Debugf("refresh token: token: %s, obsolete: %s, last_used: %s", refresh.Token, refresh.ObsoleteToken, refresh.LastUsed)
-+
-+		if !s.refreshTokenPolicy.AllowedToReuse(refresh.LastUsed) {
- 			s.logger.Errorf("refresh token with id %s claimed twice", refresh.ID)
- 			return nil, invalidErr
- 		}
-+
 +		if refresh.ObsoleteToken != token.Token {
 +			s.logger.Errorf("refresh token with id %s claimed twice: obsolete token does not match", refresh.ID)
 +			return nil, invalidErr
@@ -2124,10 +2118,12 @@ index 8ea7ea9e..d875ba1e 100644
 +			s.logger.Errorf("refresh token with id %s claimed twice: obsolete token is empty", refresh.ID)
 +			return nil, invalidErr
 +		}
- 	}
-
- 	expiredErr := newBadRequestError("Refresh token expired.")
-@@ -215,6 +225,18 @@ func (s *Server) updateOfflineSession(refresh *storage.RefreshToken, ident conne
++
++		if !s.refreshTokenPolicy.AllowedToReuse(refresh.LastUsed) {
+ 			s.logger.Errorf("refresh token with id %s claimed twice", refresh.ID)
+ 			return nil, invalidErr
+ 		}
+@@ -215,6 +224,18 @@ func (s *Server) updateOfflineSession(refresh *storage.RefreshToken, ident conne
  	return nil
  }
 
@@ -2146,7 +2142,7 @@ index 8ea7ea9e..d875ba1e 100644
  // updateRefreshToken updates refresh token and offline session in the storage
  func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *storage.RefreshToken, ident connector.Identity) (*internal.RefreshToken, *refreshError) {
  	newToken := token
-@@ -227,38 +249,36 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -227,38 +248,28 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
 
  	lastUsed := s.now()
 
@@ -2166,30 +2162,22 @@ index 8ea7ea9e..d875ba1e 100644
 -			}
 -
 -			old.ObsoleteToken = old.Token
-+		reuseAllowed := s.refreshTokenPolicy.AllowedToReuse(old.LastUsed)
-+		if reuseAllowed {
-+			// Update the last used time field only out of reuse time window
-+			//  to avoid unnecessary storage interactions, that can lead to conflict errors
-+			//  for concurrent requests
-+			lastUsed = old.LastUsed
-+		}
-+
 +		// Return the token with updated identity and last used time if rotation is disabled
 +		if !s.refreshTokenPolicy.RotationEnabled() {
 +			old.LastUsed = lastUsed
 +			return enrichClaimsFromIdentity(old, ident), nil
 +		}
 +
-+		if reuseAllowed && (old.ObsoleteToken == token.Token || old.Token == token.Token) {
++		if s.refreshTokenPolicy.AllowedToReuse(old.LastUsed) && (old.ObsoleteToken == token.Token || old.Token == token.Token) {
 +			// Do not mutate token during reuse window if it is valid
 +			newToken.Token = old.Token
 +			return old, nil
-+		}
-+
-+		if old.Token != token.Token {
-+			return old, errors.New("refresh token claimed twice")
  		}
 
++		if old.Token != token.Token {
++			return old, errors.New("refresh token claimed twice")
++		}
++
 +		old.ObsoleteToken = old.Token
  		old.Token = newToken.Token
 -		// Update the claims of the refresh token.
@@ -2209,7 +2197,7 @@ index 8ea7ea9e..d875ba1e 100644
  	}
 
  	// Update refresh token in the storage.
-@@ -268,6 +288,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -268,6 +279,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
  		return nil, newInternalServerError()
  	}
 
@@ -2266,7 +2254,7 @@ index c64c50b3..60be8f6a 100644
  		})
  	}
 diff --git a/server/rotation.go b/server/rotation.go
-index 98489767..b6406562 100644
+index 98489767..d7c6ce60 100644
 --- a/server/rotation.go
 +++ b/server/rotation.go
 @@ -245,5 +245,14 @@ func (r *RefreshTokenPolicy) AllowedToReuse(lastUsed time.Time) bool {
@@ -2276,12 +2264,12 @@ index 98489767..b6406562 100644
 -	return !r.now().After(lastUsed.Add(r.reuseInterval))
 +
 +	currTime := r.now()
-+	expiration := lastUsed.Add(r.reuseInterval)
++	reuseTill := lastUsed.Add(r.reuseInterval)
 +
-+	bf := currTime.Before(expiration)
-+	eq := currTime.Equal(expiration)
++	bf := currTime.Before(reuseTill)
++	eq := currTime.Equal(reuseTill)
 +
-+	r.logger.Debugf("allow to reuse: curr_time: %s, expiration: %s", currTime, expiration)
++	r.logger.Debugf("allow to reuse: curr_time: %s, reuse_until: %s", currTime, reuseTill)
 +
 +	return bf || eq
  }
