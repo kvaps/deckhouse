@@ -2246,6 +2246,22 @@ index c64c50b3..83791c6d 100644
  			}
  		})
  	}
+diff --git a/server/rotation.go b/server/rotation.go
+index 98489767..f297b4d3 100644
+--- a/server/rotation.go
++++ b/server/rotation.go
+@@ -245,5 +245,10 @@ func (r *RefreshTokenPolicy) AllowedToReuse(lastUsed time.Time) bool {
+ 	if r.reuseInterval == 0 {
+ 		return false // expiration disabled
+ 	}
+-	return !r.now().After(lastUsed.Add(r.reuseInterval))
++
++	currTime := r.now()
++	bf := currTime.Before(lastUsed.Add(r.reuseInterval))
++	eq := currTime.Equal(lastUsed.Add(r.reuseInterval))
++
++	return bf || eq
+ }
 diff --git a/server/server.go b/server/server.go
 old mode 100644
 new mode 100755
