@@ -2080,7 +2080,7 @@ index 2a4f8c71..acbf4ecb
  	}
 
 diff --git a/server/refreshhandlers.go b/server/refreshhandlers.go
-index 8ea7ea9e..41a862fa 100644
+index 8ea7ea9e..d875ba1e 100644
 --- a/server/refreshhandlers.go
 +++ b/server/refreshhandlers.go
 @@ -57,6 +57,7 @@ func (s *Server) extractRefreshTokenFromRequest(r *http.Request) (*internal.Refr
@@ -2091,7 +2091,7 @@ index 8ea7ea9e..41a862fa 100644
  	return token, nil
  }
 
-@@ -76,19 +77,26 @@ func (s *Server) getRefreshTokenFromStorage(clientID string, token *internal.Ref
+@@ -76,19 +77,28 @@ func (s *Server) getRefreshTokenFromStorage(clientID string, token *internal.Ref
 
  	if refresh.ClientID != clientID {
  		s.logger.Errorf("client %s trying to claim token for client %s", clientID, refresh.ClientID)
@@ -2108,6 +2108,8 @@ index 8ea7ea9e..41a862fa 100644
 -		case refresh.ObsoleteToken != token.Token:
 -			fallthrough
 -		case refresh.ObsoleteToken == "":
++		s.logger.Debugf("refresh token: token: %s, obsolete: %s, last_used: %s", refresh.Token, refresh.ObsoleteToken, refresh.LastUsed)
++
 +		if !s.refreshTokenPolicy.AllowedToReuse(refresh.LastUsed) {
  			s.logger.Errorf("refresh token with id %s claimed twice", refresh.ID)
  			return nil, invalidErr
@@ -2125,7 +2127,7 @@ index 8ea7ea9e..41a862fa 100644
  	}
 
  	expiredErr := newBadRequestError("Refresh token expired.")
-@@ -215,6 +223,18 @@ func (s *Server) updateOfflineSession(refresh *storage.RefreshToken, ident conne
+@@ -215,6 +225,18 @@ func (s *Server) updateOfflineSession(refresh *storage.RefreshToken, ident conne
  	return nil
  }
 
@@ -2144,7 +2146,7 @@ index 8ea7ea9e..41a862fa 100644
  // updateRefreshToken updates refresh token and offline session in the storage
  func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *storage.RefreshToken, ident connector.Identity) (*internal.RefreshToken, *refreshError) {
  	newToken := token
-@@ -227,38 +247,36 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -227,38 +249,36 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
 
  	lastUsed := s.now()
 
@@ -2207,7 +2209,7 @@ index 8ea7ea9e..41a862fa 100644
  	}
 
  	// Update refresh token in the storage.
-@@ -268,6 +286,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -268,6 +288,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
  		return nil, newInternalServerError()
  	}
 
@@ -2220,10 +2222,27 @@ index 8ea7ea9e..41a862fa 100644
  }
 
 diff --git a/server/refreshhandlers_test.go b/server/refreshhandlers_test.go
-index c64c50b3..83791c6d 100644
+index c64c50b3..60be8f6a 100644
 --- a/server/refreshhandlers_test.go
 +++ b/server/refreshhandlers_test.go
-@@ -193,6 +193,7 @@ func TestRefreshTokenExpirationScenarios(t *testing.T) {
+@@ -11,6 +11,7 @@ import (
+ 	"testing"
+ 	"time"
+
++	"github.com/sirupsen/logrus"
+ 	"github.com/stretchr/testify/require"
+
+ 	"github.com/dexidp/dex/server/internal"
+@@ -155,6 +156,8 @@ func TestRefreshTokenExpirationScenarios(t *testing.T) {
+ 			ctx, cancel := context.WithCancel(context.Background())
+ 			defer cancel()
+
++			tc.policy.logger = logrus.New()
++
+ 			// Setup a dex server.
+ 			httpServer, s := newTestServer(ctx, t, func(c *Config) {
+ 				c.RefreshTokenPolicy = tc.policy
+@@ -193,6 +196,7 @@ func TestRefreshTokenExpirationScenarios(t *testing.T) {
  			var ref struct {
  				Token string `json:"refresh_token"`
  			}
@@ -2231,7 +2250,7 @@ index c64c50b3..83791c6d 100644
  			err = json.Unmarshal(rr.Body.Bytes(), &ref)
  			require.NoError(t, err)
 
-@@ -203,9 +204,12 @@ func TestRefreshTokenExpirationScenarios(t *testing.T) {
+@@ -203,9 +207,12 @@ func TestRefreshTokenExpirationScenarios(t *testing.T) {
  			}
 
  			if tc.useObsolete {
@@ -2247,18 +2266,22 @@ index c64c50b3..83791c6d 100644
  		})
  	}
 diff --git a/server/rotation.go b/server/rotation.go
-index 98489767..f297b4d3 100644
+index 98489767..b6406562 100644
 --- a/server/rotation.go
 +++ b/server/rotation.go
-@@ -245,5 +245,10 @@ func (r *RefreshTokenPolicy) AllowedToReuse(lastUsed time.Time) bool {
+@@ -245,5 +245,14 @@ func (r *RefreshTokenPolicy) AllowedToReuse(lastUsed time.Time) bool {
  	if r.reuseInterval == 0 {
  		return false // expiration disabled
  	}
 -	return !r.now().After(lastUsed.Add(r.reuseInterval))
 +
 +	currTime := r.now()
-+	bf := currTime.Before(lastUsed.Add(r.reuseInterval))
-+	eq := currTime.Equal(lastUsed.Add(r.reuseInterval))
++	expiration := lastUsed.Add(r.reuseInterval)
++
++	bf := currTime.Before(expiration)
++	eq := currTime.Equal(expiration)
++
++	r.logger.Debugf("allow to reuse: curr_time: %s, expiration: %s", currTime, expiration)
 +
 +	return bf || eq
  }
