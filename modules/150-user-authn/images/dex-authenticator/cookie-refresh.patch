@@ -1,24 +1,25 @@
 diff --git a/pkg/sessions/persistence/manager.go b/pkg/sessions/persistence/manager.go
-index 3215b25..375d124 100644
+index 3215b25..633f3bc 100644
 --- a/pkg/sessions/persistence/manager.go
 +++ b/pkg/sessions/persistence/manager.go
-@@ -33,12 +33,14 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
+@@ -3,6 +3,7 @@ package persistence
+ import (
+ 	"fmt"
+ 	"net/http"
++	"strings"
+ 	"time"
+
+ 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+@@ -33,7 +34,7 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
  		s.CreatedAtNow()
  	}
 
 -	tckt, err := decodeTicketFromRequest(req, m.Options)
-+	tckt, refreshToken, err := decodeTicketFromRequest(req, m.Options)
++	tckt, _, err := decodeTicketFromRequest(req, m.Options)
  	if err != nil {
  		tckt, err = newTicket(m.Options)
  		if err != nil {
- 			return fmt.Errorf("error creating a session ticket: %v", err)
- 		}
-+	} else {
-+		s.RefreshToken = refreshToken
- 	}
-
- 	err = tckt.saveSession(s, func(key string, val []byte, exp time.Duration) error {
-@@ -54,23 +56,28 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
+@@ -54,23 +55,36 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
  // Load reads sessions.SessionState information from a session store. It will
  // use the session ticket from the http.Request's cookie.
  func (m *Manager) Load(req *http.Request) (*sessions.SessionState, error) {
@@ -36,9 +37,17 @@ index 3215b25..375d124 100644
  		m.Store.Lock,
  	)
 +
-+	if state != nil {
-+		state.RefreshToken = refreshToken
++	if err != nil && strings.HasPrefix(err.Error(), "error loading redis session") {
++		// Suppress redis loadig errors, because in this case we have a refresh token in cookie
++		err = nil
 +	}
++
++	if state == nil {
++		state = &sessions.SessionState{}
++		state.CreatedAtNow()
++	}
++
++	state.RefreshToken = refreshToken
 +	return state, err
  }
 
