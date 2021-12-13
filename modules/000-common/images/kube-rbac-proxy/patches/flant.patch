@@ -5,7 +5,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/main.go b/main.go
 --- a/main.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/main.go	(revision 8556440fe33454e773d8bd547dbe057b4bc89b79)
++++ b/main.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
 @@ -20,6 +20,7 @@
  	"context"
  	"crypto/tls"
@@ -289,6 +289,29 @@ diff --git a/main.go b/main.go
 +	}
 +	return a + b
 +}
+Index: pkg/proxy/proxy.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pkg/proxy/proxy.go b/pkg/proxy/proxy.go
+--- a/pkg/proxy/proxy.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
++++ b/pkg/proxy/proxy.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
+@@ -267,7 +267,13 @@
+ // DeepCopy of Proxy Configuration
+ func (c *Config) DeepCopy() *Config {
+ 	res := &Config{
+-		Authentication: &authn.AuthnConfig{},
++		Authentication: &authn.AuthnConfig{
++			X509:   &authn.X509Config{},
++			Header: &authn.AuthnHeaderConfig{},
++			OIDC:   &authn.OIDCConfig{},
++			Token:  &authn.TokenConfig{},
++		},
++		Authorization: &authz.Config{},
+ 	}
+
+ 	if c.Authentication != nil {
 Index: transport.go
 IDEA additional info:
 Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
@@ -296,7 +319,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/transport.go b/transport.go
 --- a/transport.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/transport.go	(revision 8556440fe33454e773d8bd547dbe057b4bc89b79)
++++ b/transport.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
 @@ -21,17 +21,34 @@
  	"crypto/x509"
  	"errors"
@@ -340,7 +363,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/transport_test.go b/transport_test.go
 --- a/transport_test.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/transport_test.go	(revision 8556440fe33454e773d8bd547dbe057b4bc89b79)
++++ b/transport_test.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
 @@ -21,7 +21,7 @@
  )
 
