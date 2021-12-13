@@ -5,7 +5,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/main.go b/main.go
 --- a/main.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/main.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
++++ b/main.go	(revision 0aeb8b6ab9dfa2176031935c24c33c6b7ba9b8bc)
 @@ -20,6 +20,7 @@
  	"context"
  	"crypto/tls"
@@ -296,7 +296,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/pkg/proxy/proxy.go b/pkg/proxy/proxy.go
 --- a/pkg/proxy/proxy.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/pkg/proxy/proxy.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
++++ b/pkg/proxy/proxy.go	(revision 0aeb8b6ab9dfa2176031935c24c33c6b7ba9b8bc)
 @@ -267,7 +267,13 @@
  // DeepCopy of Proxy Configuration
  func (c *Config) DeepCopy() *Config {
@@ -312,6 +312,51 @@ diff --git a/pkg/proxy/proxy.go b/pkg/proxy/proxy.go
  	}
 
  	if c.Authentication != nil {
+@@ -287,6 +293,25 @@
+ 				GroupSeparator:  c.Authentication.Header.GroupSeparator,
+ 			}
+ 		}
++
++		if c.Authentication.OIDC != nil {
++			res.Authentication.OIDC = &authn.OIDCConfig{
++				IssuerURL:            c.Authentication.OIDC.IssuerURL,
++				ClientID:             c.Authentication.OIDC.ClientID,
++				CAFile:               c.Authentication.OIDC.CAFile,
++				UsernameClaim:        c.Authentication.OIDC.UsernameClaim,
++				UsernamePrefix:       c.Authentication.OIDC.UsernamePrefix,
++				GroupsClaim:          c.Authentication.OIDC.GroupsClaim,
++				GroupsPrefix:         c.Authentication.OIDC.GroupsPrefix,
++				SupportedSigningAlgs: c.Authentication.OIDC.SupportedSigningAlgs,
++			}
++		}
++
++		if c.Authentication.Token != nil {
++			res.Authentication.Token = &authn.TokenConfig{
++				Audiences: c.Authentication.Token.Audiences,
++			}
++		}
+ 	}
+
+ 	if c.Authorization != nil {
+Index: pkg/proxy/proxy_test.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pkg/proxy/proxy_test.go b/pkg/proxy/proxy_test.go
+--- a/pkg/proxy/proxy_test.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
++++ b/pkg/proxy/proxy_test.go	(revision 0aeb8b6ab9dfa2176031935c24c33c6b7ba9b8bc)
+@@ -306,7 +306,9 @@
+ 	for _, c := range cases {
+ 		t.Run(c.description, func(t *testing.T) {
+ 			w := httptest.NewRecorder()
+-			proxy, err := New(kc, cfg, c.authorizer, fakeAuth, time.Hour*3600)
++			//proxy, err := New(kc, cfg, c.authorizer, fakeAuth, time.Hour*3600)
++			proxyConfig := Config{Authentication: cfg.Authentication, Authorization: cfg.Authorization}
++			proxy, err := New(kc, *proxyConfig.DeepCopy(), c.authorizer, fakeAuth, time.Hour*3600)
+ 			if err != nil {
+ 				t.Fatalf("Failed to instantiate test proxy. Details : %s", err.Error())
+ 			}
 Index: transport.go
 IDEA additional info:
 Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
@@ -319,7 +364,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/transport.go b/transport.go
 --- a/transport.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/transport.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
++++ b/transport.go	(revision 0aeb8b6ab9dfa2176031935c24c33c6b7ba9b8bc)
 @@ -21,17 +21,34 @@
  	"crypto/x509"
  	"errors"
@@ -363,7 +408,7 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 ===================================================================
 diff --git a/transport_test.go b/transport_test.go
 --- a/transport_test.go	(revision 8bdfa412f6451ac36c9dc4709e6307219890993a)
-+++ b/transport_test.go	(revision 3e92d997b4565a7864689aece740c5753dfe8d04)
++++ b/transport_test.go	(revision 0aeb8b6ab9dfa2176031935c24c33c6b7ba9b8bc)
 @@ -21,7 +21,7 @@
  )
 
