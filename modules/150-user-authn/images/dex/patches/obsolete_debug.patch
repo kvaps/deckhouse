@@ -2080,7 +2080,7 @@ index 2a4f8c71..acbf4ecb
  	}
 
 diff --git a/server/refreshhandlers.go b/server/refreshhandlers.go
-index 8ea7ea9e..06c985a1 100644
+index 8ea7ea9e..10a981cf 100644
 --- a/server/refreshhandlers.go
 +++ b/server/refreshhandlers.go
 @@ -57,6 +57,7 @@ func (s *Server) extractRefreshTokenFromRequest(r *http.Request) (*internal.Refr
@@ -2142,7 +2142,7 @@ index 8ea7ea9e..06c985a1 100644
  // updateRefreshToken updates refresh token and offline session in the storage
  func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *storage.RefreshToken, ident connector.Identity) (*internal.RefreshToken, *refreshError) {
  	newToken := token
-@@ -227,38 +248,28 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -227,38 +248,29 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
 
  	lastUsed := s.now()
 
@@ -2171,6 +2171,7 @@ index 8ea7ea9e..06c985a1 100644
 +		if s.refreshTokenPolicy.AllowedToReuse(old.LastUsed) && (old.ObsoleteToken == token.Token || old.Token == token.Token) {
 +			// Do not mutate token during reuse window if it is valid
 +			newToken.Token = old.Token
++			lastUsed = old.LastUsed
 +			return old, nil
  		}
 
@@ -2197,7 +2198,7 @@ index 8ea7ea9e..06c985a1 100644
  	}
 
  	// Update refresh token in the storage.
-@@ -268,6 +279,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
+@@ -268,6 +280,11 @@ func (s *Server) updateRefreshToken(token *internal.RefreshToken, refresh *stora
  		return nil, newInternalServerError()
  	}
 
