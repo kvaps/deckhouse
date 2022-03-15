@@ -1,0 +1,29 @@
+- name: kubernetes.linstor.storage_pool_capacity
+  rules:
+    - alert: D8LinstorStoragePoolCapacityPressure
+      expr: linstor_storage_pool_capacity_free_bytes * 100 / linstor_storage_pool_capacity_total_bytes < 10
+      for: 5m
+      labels:
+        severity_level: "6"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        description: |
+          Linstor storage pool {{ $labels.storage_pool }} on node {{ $labels.node }} has less than 10% space left. Current free space: {{ $value }}%
+        summary: Storage pool running out of free space 
+
+- name: kubernetes.linstor.volume_health
+  rules:
+    - alert: D8LinstorVolumeIsNotHealthy
+      expr: count(linstor_volume_state != 1 and linstor_volume_state != 4 and linstor_volume_state != 7 and linstor_volume_state != 8 and linstor_volume_state != 9) > count(linstor_volume_state offset 5m)
+      for: 5m
+      labels:
+        severity_level: "6"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        description: |
+          Check device {{ $labels.resource }} on {{ $labels.hostname }}'
+        summary: DRBD device is not healthy
